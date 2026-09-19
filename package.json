@@ -10,7 +10,8 @@
   "author": "Cola_CaO",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^44.4.2"
+    "electron": "^44.4.2",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "@deepseek-ai/dsh": "^0.1.5-rc.2",
@@ -18,5 +19,48 @@
     "exceljs": "^4.4.0",
     "jszip": "^3.10.2",
     "pptxgenjs": "^4.0.1"
+  },
+  "build": {
+    "appId": "com.colacao.lighthouse",
+    "productName": "灯塔",
+    "directories": {
+      "output": "dist"
+    },
+    "asar": false,
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "tools/**/*",
+      "runtime/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "config.json",
+      "!**/.scratch/**",
+      "!data/**",
+      "!workspace/**",
+      "!dsh-home/**",
+      "!dist/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "灯塔-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "灯塔",
+      "deleteAppDataOnUninstall": false
+    },
+    "npmRebuild": false
   }
 }

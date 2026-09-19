@@ -59,7 +59,15 @@ function systemWithMemory(rulesText) {
   memory = await window.lh.getMemory()
   ui = (await window.lh.loadChat()) || []
   if (ui.length === 0) {
-    addBot('你好呀 ✦\n我是 Cola 的 AI 分身，有什么想问的、想写的，直接说就行。')
+    addBot([
+      '你好呀 ✦',
+      '我是 Cola 的 AI 分身——不只会聊天，还能帮你干活。',
+      '',
+      '· 想问什么直接问：学习、写东西、查资料都行',
+      '· 有文件要处理（Word / Excel / PPT / 图片），拖进这个窗口就行',
+      '· 让我动文件之前，我会先把打算做什么给你过目，你点头我才动手',
+      '· 想让我换个说话方式，跟我说「以后……」我就记下了',
+    ].join('\n'))
   } else {
     for (const m of ui) {
       if (m.role === 'user') addUser(m.text)
@@ -106,8 +114,7 @@ document.getElementById('btn-wall').onclick = async () => {
   if (url) applyWallpaper(url)
 }
 document.getElementById('btn-wall-reset').onclick = async () => {
-  await window.lh.clearWallpaper()
-  applyWallpaper('')
+  applyWallpaper(await window.lh.clearWallpaper())   // 恢复成自带默认图（而不是空）
 }
 
 const savedGlass = localStorage.getItem('lh.glass') || '72'

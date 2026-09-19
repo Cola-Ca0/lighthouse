@@ -178,6 +178,23 @@ function wallpaperFile() {
   } catch {}
   return ''
 }
+// 默认壁纸 = 应用自带的头像图（用户可随时换/恢复默认）。
+// 按魔数认实际格式——avatar.png 其实存的是 JPEG，别被扩展名骗了。
+function imageExtOf(buf) {
+  if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50) return 'png'
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8) return 'jpg'
+  if (buf.length > 12 && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp'
+  return 'png'
+}
+function seedDefaultWallpaper() {
+  if (wallpaperFile()) return                       // 已经有壁纸了（用户自己换过）就不动
+  const src = path.join(__dirname, 'src', 'assets', 'avatar.png')
+  try {
+    const buf = fs.readFileSync(src)
+    fs.writeFileSync(path.join(DATA_DIR, 'wallpaper.' + imageExtOf(buf)), buf)
+  } catch { /* 没有默认图就退回内置渐变 */ }
+}
+
 function wallpaperDataUrl() {
   const p = wallpaperFile()
   if (!p) return ''
@@ -239,6 +256,7 @@ app.whenReady().then(() => {
   fs.mkdirSync(DATA_DIR, { recursive: true })
   if (!fs.existsSync(RULES_PATH)) fs.writeFileSync(RULES_PATH, DEFAULT_RULES)   // 首次运行播种
   fs.mkdirSync(path.join(WORKSPACE, '成品'), { recursive: true })               // 成品单独放，原文件不动
+  seedDefaultWallpaper()                                                        // 默认背景 = 自带头像图
   if (!seedDshHome()) { /* DSH 没装齐的话，干活会直接报错给用户，聊天不受影响 */ }
   ipcMain.handle('get-key', () => readKey())
   ipcMain.handle('get-rules', () => { try { return fs.readFileSync(RULES_PATH, 'utf8') } catch { return '' } })
@@ -302,9 +320,10 @@ app.whenReady().then(() => {
       return wallpaperDataUrl()
     } catch { return '' }
   })
-  ipcMain.handle('clear-wallpaper', () => {
+  ipcMain.handle('clear-wallpaper', () => {   // 恢复默认 = 删掉自选的、放回自带默认图
     try { const p = wallpaperFile(); if (p) fs.unlinkSync(p) } catch {}
-    return ''
+    seedDefaultWallpaper()
+    return wallpaperDataUrl()
   })
   ipcMain.handle('load-chat', () => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'chat.json'), 'utf8')) } catch { return [] } })
   ipcMain.handle('save-chat', (_e, msgs) => { try { fs.writeFileSync(path.join(DATA_DIR, 'chat.json'), JSON.stringify(msgs)) } catch {} })
