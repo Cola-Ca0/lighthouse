@@ -441,11 +441,12 @@ async function send() {
           } else {
             out.textContent = '方案理好了，你看行不行：'
             const { card, yes, no } = showConfirmCard(planBody)
+            // 结果要另起一条消息：状态气泡在卡片上方，写回去会出现"结果在计划上面"的倒序
             const finish = (msg) => {
               card.classList.add('done')
               yes.disabled = true
               no.disabled = true
-              setBubble(out, msg)
+              setBubble(addBot(''), msg)
               storePush('bot', msg)
               scrollToBottom()
             }
