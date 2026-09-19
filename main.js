@@ -23,6 +23,9 @@ const TASK_TIMEOUT = 5 * 60 * 1000
 // 聊天侧：渲染进程经 get-rules 读进 system prompt；现场调教（AI 写规则）走 append-rule。
 const RULES_PATH = path.join(WORKSPACE, 'AGENTS.md')
 
+// 工具箱（v0.6）：Office 读写命令行，干活手用；路径写死成绝对路径喂给它
+const TOOLS_JS = path.join(__dirname, 'tools', 'office.js')
+
 const DEFAULT_RULES = `# 灯塔 · 规则
 
 > 这里管着 Cola 怎么说话、怎么办事——想让它怎么做，改这个文件就行，一行一条，保存即生效。
@@ -160,6 +163,16 @@ app.whenReady().then(() => {
     } catch { return false }
   })
   ipcMain.handle('open-rules', () => shell.openPath(RULES_PATH))
+  // 干活手的工具箱提示（v0.6）：告诉它 Office 有现成工具，别自己拼 XML / 别依赖本机 Python
+  ipcMain.handle('get-engine-hint', () => fs.existsSync(TOOLS_JS)
+    ? '【工具箱】要读写 Word / Excel / PPT（docx / xlsx / pptx）时，一律用下面这个现成的命令行工具：'
+      + '用户的电脑上没有 Python，别用 Python/pip 生成文档，也别自己手拼 XML。\n'
+      + 'node "' + TOOLS_JS + '" read <文件>   —— 提取文字\n'
+      + 'node "' + TOOLS_JS + '" docx-new <输出.docx> <规格.json>   —— 生成 Word（xlsx-new / pptx-new 同理）\n'
+      + '规格 JSON 的形状跑 `node "' + TOOLS_JS + '" help` 看。路径写工作区里的相对路径就行。\n'
+      + '（另外：汇报是直接显示给用户看的聊天消息，别用 Markdown 记号——#、**、` 都会原样露出来，'
+      + '要分条就换行写 1. 2. 3.，要强调就用「」。）\n\n'
+    : '')
   ipcMain.handle('get-wallpaper', () => wallpaperDataUrl())
   ipcMain.handle('pick-wallpaper', async () => {
     const r = await dialog.showOpenDialog({

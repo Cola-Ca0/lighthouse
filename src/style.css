@@ -174,6 +174,31 @@ body.has-wall {
   border-style: dashed;
 }
 
+/* 气泡里的轻排版：**加粗** 与 `代码`（模型爱写 Markdown，这里接住最常见的两种） */
+.bubble b { color: var(--text); font-weight: 600; }
+.bubble code {
+  font-family: Consolas, 'Cascadia Mono', 'Microsoft YaHei', monospace;
+  font-size: 12.5px;
+  padding: 1px 6px;
+  border-radius: 8px;                  /* Shape Tier: 小内部件 8px */
+  background: rgba(91, 160, 224, 0.14);
+  border: 1px solid rgba(91, 160, 224, 0.16);
+}
+/* 多行代码块：深底一整块，别跟气泡抢 */
+.bubble pre.codeblock {
+  margin: 7px 0;
+  padding: 9px 12px;
+  border-radius: 8px;                  /* Shape Tier: 小内部件 8px */
+  background: rgba(8, 18, 34, 0.55);
+  border: 1px solid rgba(91, 160, 224, 0.16);
+  font-family: Consolas, 'Cascadia Mono', 'Microsoft YaHei', monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* 流式打字光标 */
 .caret {
   display: inline-block;

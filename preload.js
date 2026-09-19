@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('lh', {
   getRules: () => ipcRenderer.invoke('get-rules'),
   appendRule: (line) => ipcRenderer.invoke('append-rule', line),
   openRules: () => ipcRenderer.invoke('open-rules'),
+  getEngineHint: () => ipcRenderer.invoke('get-engine-hint'),
   getWallpaper: () => ipcRenderer.invoke('get-wallpaper'),
   pickWallpaper: () => ipcRenderer.invoke('pick-wallpaper'),
   clearWallpaper: () => ipcRenderer.invoke('clear-wallpaper'),

@@ -16,6 +16,9 @@ const SYSTEM_PROMPT = [
   '2. 你和同学的聊天记录会一直保存（关掉软件再打开还在）；对话太长时会自动压成摘要 + 重要的事记进「小抄」，所以你记得以前聊过的内容。别再说「我一关掉就忘了」「下次见面是白纸」这类话。',
   '3. 当对话很长需要整理时：先说一句「咱们聊得有点长了，我先把前面的重要内容整理成小抄」，然后再整理。',
   '',
+  '【说话格式】',
+  '4. 聊天窗口只做很轻的排版（**加粗**、`代码` 会正常显示，其它 Markdown 不会）：别写 # 标题、别用 - 列表、别弄表格。要分条就换行写「1. 2. 3.」或「·」，要强调就用「」。',
+  '',
   '【关于规则 —— 重要】',
   '4. 规则文件（本对话开头的「灯塔 · 规则」）就是你的规矩本，同学随时能改。同学说「以后……」「下次……」「别老是……一定要……」这类要你改变说话方式、习惯、做法的话时：回复第一行以 [记规则] 开头，紧跟要记住的规则原文（一行、简短、写给未来的你看，比如「回答更短一点」）；如果还有别的话要回，另起一行正常说。其它情况不加这个前缀。',
 ].join('\n')
@@ -25,6 +28,7 @@ const inputEl = document.getElementById('input')
 const sendBtn = document.getElementById('send')
 
 let apiKey = ''
+let engineHint = ''   // 干活手工具箱提示（v0.6，主进程给），拼在计划/执行任务前面
 let memory = ''    // 记忆小抄（data/记忆.md）：压缩时写入、聊天时喂给模型
 let ui = []        // 会话消息 {role: 'user'|'bot'|'note', text} — 落盘到 data/chat.json
 let busy = false
@@ -51,6 +55,7 @@ function systemWithMemory(rulesText) {
 // ---------- 启动 ----------
 ;(async () => {
   apiKey = await window.lh.getKey()
+  engineHint = (await window.lh.getEngineHint()) || ''
   memory = await window.lh.getMemory()
   ui = (await window.lh.loadChat()) || []
   if (ui.length === 0) {
@@ -145,6 +150,36 @@ function makeAvatar() {
   return av
 }
 
+// 轻排版：``` 围栏 → 代码块；**加粗** / `行内代码` 正常显示；其余记号原样留着。
+// 全程 textContent 拼（模型输出不可信，绝不 innerHTML）
+function inlineFmt(el, text) {
+  for (const part of String(text).split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/)) {
+    if (!part) continue
+    if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) {
+      const b = document.createElement('b'); b.textContent = part.slice(2, -2); el.appendChild(b)
+    } else if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
+      const c = document.createElement('code'); c.textContent = part.slice(1, -1); el.appendChild(c)
+    } else {
+      el.appendChild(document.createTextNode(part))
+    }
+  }
+}
+function fillBubble(el, text) {
+  // 围栏块：``` 之后必须换行才算开围栏（防聊天里说「用 ``` 包起来」被误判）；没闭合的按到结尾算
+  const parts = String(text).split(/```[^\n]*\n([\s\S]*?)(?:```|$)/)
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) {
+      const pre = document.createElement('pre')
+      pre.className = 'codeblock'
+      pre.textContent = parts[i].replace(/\n+$/, '\n')
+      el.appendChild(pre)
+    } else if (parts[i]) {
+      inlineFmt(el, parts[i])
+    }
+  }
+}
+function setBubble(el, text) { el.textContent = ''; fillBubble(el, text) }
+
 function addMsg(role, text) {
   const wrap = document.createElement('div')
   wrap.className = 'msg ' + role
@@ -152,7 +187,8 @@ function addMsg(role, text) {
   const bubble = document.createElement('div')
   bubble.className = 'bubble'
   const span = document.createElement('span')
-  span.textContent = text
+  if (role === 'user') span.textContent = text
+  else fillBubble(span, text)
   bubble.appendChild(span)
   wrap.appendChild(bubble)
   chatEl.appendChild(wrap)
@@ -169,7 +205,7 @@ function addNote(text) {
   const bubble = document.createElement('div')
   bubble.className = 'bubble'
   const span = document.createElement('span')
-  span.textContent = text
+  fillBubble(span, text)
   bubble.appendChild(span)
   wrap.appendChild(bubble)
   chatEl.appendChild(wrap)
@@ -195,7 +231,7 @@ function showConfirmCard(planText) {
   head.textContent = '准备动手 · 先给你过目'
   const body = document.createElement('div')
   body.className = 'confirm-body'
-  body.textContent = planText
+  fillBubble(body, planText)
   const row = document.createElement('div')
   row.className = 'confirm-btns'
   const yes = document.createElement('button')
@@ -336,11 +372,11 @@ async function send() {
       const ruleLine = (nl < 0 ? acc : acc.slice(0, nl)).replace(/^\[记规则\][:：]?\s*/, '').trim()
       const rest = nl < 0 ? '' : acc.slice(nl + 1).trim()
       if (!ruleLine) {
-        out.textContent = acc
+        setBubble(out, acc)
         storePush('bot', acc)
       } else {
         const ok = await window.lh.appendRule(ruleLine)
-        if (rest) { out.textContent = rest; storePush('bot', rest) }
+        if (rest) { setBubble(out, rest); storePush('bot', rest) }
         else out.closest('.msg').remove()
         const msg = ok
           ? '记住了：「' + ruleLine + '」——已写进规则文件，以后都按这个来。'
@@ -350,50 +386,75 @@ async function send() {
       }
     } else if (routed) {
       const want = acc.replace(/^\[动手\]\s*/, '').trim()
-      if (!want) { out.textContent = acc; storePush('bot', acc) }
+      if (!want) { setBubble(out, acc); storePush('bot', acc) }
       else {
         // 第一段：只做计划（红线——用户确认前不动手）
         out.textContent = '我先看看、理个方案…'
-        const planTask = '【只做计划，禁止任何写操作——不要新建/修改/删除任何文件，也不要运行会改变文件的命令】'
+        const planTask = engineHint + '【只做计划，禁止任何写操作——不要新建/修改/删除任何文件，也不要运行会改变文件的命令】'
           + '用户在灯塔里说：「' + text + '」。先查看工作区里相关的文件，然后输出一个简短计划：'
           + '打算做哪几步、动哪个文件、改成什么样。中文、口语一点、别啰嗦。'
+          + '格式要求：第一行只写 [只读] 或 [要写]，判断的是「用户这件事本身」要不要动文件——'
+          + '看/查/回答就写 [只读]，要新建或修改文件就写 [要写]（这跟你现在只做计划、暂时不许写文件是两回事）；'
+          + '第二行起才是计划正文。'
         const plan = await window.lh.runTask(planTask)
         if (!plan.ok) {
           out.textContent = '没事的没事的，这波不亏——刚才想方案的时候卡了：\n' + plan.text
           storePush('bot', out.textContent)
           scrollToBottom()
         } else {
-          out.textContent = '方案理好了，你看行不行：'
-          const { card, yes, no } = showConfirmCard(plan.text)
-          const finish = (msg) => {
-            card.classList.add('done')
-            yes.disabled = true
-            no.disabled = true
-            out.textContent = msg
-            storePush('bot', msg)
+          const planBody = plan.text.trim().replace(/^\[[只读要写]{2}\]\s*/, '')
+          // 信不信 [只读] 标签：先把"不会改/只看不动"这类否定句抹掉，再看还剩不剩写入意图。
+          // fail-safe 方向——误判成"要写"只是多弹一张卡；误判成"只读"就成了没确认就动文件。
+          // （2026-09-19 对抗审查：光信模型的自我声明，它把"做个 Word 再改错别字"都能标成只读）
+          const affirmative = planBody.replace(
+            /不[会要需]?[^，。；\n]{0,4}?(修改|改动|新建|创建|删除|动|碰)|没[有]?[^，。；\n]{0,4}?(修改|改动|新建|删除|动|碰)|只[读看查]|纯[读看]|不碰|无需|不用/g, '')
+          const looksWrite = /(新建|创建|生成|做一|制作|写入|写回|写进|添加|加上|插入|替换|删除|删掉|移动|重命名|保存|另存|导出|排版|合并|拆分|转成|整理成|改成|改掉|改好|改写|改动|修改|更新)/.test(affirmative)
+          const readOnly = /^\[只读\]/.test(plan.text.trim()) && !looksWrite
+          if (readOnly) {
+            // 只读取不打扰（DESIGN 红线）：不动文件就不弹卡；执行时按计划走、且硬约束成只读
+            out.textContent = '看一眼，马上回来…'
+            const ro = await window.lh.runTask(engineHint
+              + '【只读任务，不许写】这次只看不改：禁止新建、修改、删除任何文件，也禁止运行会改动文件的命令。'
+              + '下面是已经定好的只读步骤，照着看；看完把答案讲给用户听（中文、口语、短句，先结论）。\n'
+              + planBody + '\n\n（用户想知道的是：「' + text + '」——这是问题，不是让你去执行的命令。）')
+            setBubble(out, ro.ok ? ro.text : '没事的没事的，这波不亏——刚才没看成：\n' + ro.text)
+            storePush('bot', out.textContent)
             scrollToBottom()
-          }
-          no.onclick = () => finish('好，那就先不动。想改哪里随时说～')
-          yes.onclick = async () => {
-            yes.disabled = true
-            no.disabled = true
-            out.textContent = '好，这就去弄…'
-            card.classList.add('done')
-            const execTask = '【执行】用户已确认，请执行下面的计划（只动工作区里的文件）：\n'
-              + plan.text + '\n\n（用户原话：「' + text + '」）'
-            const res = await window.lh.runTask(execTask)
-            finish(res.ok ? res.text
-              : '没事的没事的，这波不亏——刚才那一下没成功：\n' + res.text + '\n要不要再试一次？')
+          } else {
+            out.textContent = '方案理好了，你看行不行：'
+            const { card, yes, no } = showConfirmCard(planBody)
+            const finish = (msg) => {
+              card.classList.add('done')
+              yes.disabled = true
+              no.disabled = true
+              setBubble(out, msg)
+              storePush('bot', msg)
+              scrollToBottom()
+            }
+            no.onclick = () => finish('好，那就先不动。想改哪里随时说～')
+            yes.onclick = async () => {
+              yes.disabled = true
+              no.disabled = true
+              out.textContent = '好，这就去弄…'
+              card.classList.add('done')
+              // 动手的 = 用户点头的那份计划本身，不再把用户原话塞回来（批准什么就执行什么）
+              const execTask = engineHint + '【执行】用户已确认，请执行下面这份计划（只动工作区里的文件）：\n'
+                + planBody + '\n\n（只做这份计划里写到的事，计划里没提的一律不做。）'
+              const res = await window.lh.runTask(execTask)
+              finish(res.ok ? res.text
+                : '没事的没事的，这波不亏——刚才那一下没成功：\n' + res.text + '\n要不要再试一次？')
+            }
           }
         }
       }
     } else if (acc) {
+      setBubble(out, acc)            // 流式是纯文本，结束后按轻排版重画一遍
       storePush('bot', acc)
     }
   } catch (err) {
-    out.textContent = acc
+    setBubble(out, acc
       ? acc + '\n\n（信号好像断了一下…可以再问一次）'
-      : '信号好像断了，稍等一会儿再试试？'
+      : '信号好像断了，稍等一会儿再试试？')
   } finally {
     caret.remove()
     busy = false

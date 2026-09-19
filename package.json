@@ -11,5 +11,11 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^44.4.2"
+  },
+  "dependencies": {
+    "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.2",
+    "pptxgenjs": "^4.0.1"
   }
 }
