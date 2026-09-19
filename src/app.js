@@ -3,7 +3,8 @@
 // 流式：直连 DeepSeek API（CORS 开放已验证），带缓冲的 SSE 解析（跨 chunk 不丢数据）
 
 const API_URL = 'https://api.deepseek.com/chat/completions'
-const MODEL = 'deepseek-flash'   // 2026-09-19 修正: deepseek-chat 已失效; 现行=deepseek-flash / deepseek-v4-pro(深度思考,待接)
+const MODEL = 'deepseek-flash'        // 日常：快、便宜
+const MODEL_DEEP = 'deepseek-v4-pro'  // 深度思考开关（9/19 实测：models 端点确认；推理走 reasoning_content，不显示给同学）
 
 // v0.3 起：人格与规矩（Cola 口吻 / 照顾同学 / 风格）全部迁到工作区的规则文件（workspace/AGENTS.md），
 // 用户可改、可加；现场调教由 AI 自己写回文件。这里只留【应用协议】——路由与机制，不属于可编辑的人格。
@@ -67,6 +68,17 @@ function systemWithMemory(rulesText) {
 // ---------- 窗口按钮 ----------
 document.getElementById('btn-folder').onclick = () => window.lh.openWorkspace()
 document.getElementById('btn-rules').onclick = () => window.lh.openRules()
+
+// ---------- 深度思考开关（v0.4）：localStorage 记住选择，关掉软件再开还在 ----------
+let deepThink = localStorage.getItem('lh.deepThink') === '1'
+const thinkBtn = document.getElementById('btn-think')
+const renderThink = () => thinkBtn.classList.toggle('on', deepThink)
+thinkBtn.onclick = () => {
+  deepThink = !deepThink
+  localStorage.setItem('lh.deepThink', deepThink ? '1' : '0')
+  renderThink()
+}
+renderThink()
 document.getElementById('btn-min').onclick = () => window.lh.minimize()
 document.getElementById('btn-close').onclick = () => window.lh.close()
 
@@ -230,19 +242,21 @@ async function send() {
   const rulesText = await window.lh.getRules().catch(() => '')   // 每次现读：刚改的文件立刻生效
 
   try {
+    const reqBody = {
+      model: deepThink ? MODEL_DEEP : MODEL,
+      messages: [{ role: 'system', content: systemWithMemory(rulesText) }, ...toApiMsgs()],
+      stream: true,
+      // 推理 token 计入 completion_tokens（实测），深度思考留出思考空间
+      max_tokens: deepThink ? 8192 : 2048,
+    }
+    if (!deepThink) reqBody.temperature = 1.1   // 推理模型不吃 temperature（不传即默认）
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + apiKey,
       },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [{ role: 'system', content: systemWithMemory(rulesText) }, ...toApiMsgs()],
-        stream: true,
-        temperature: 1.1,
-        max_tokens: 2048,
-      }),
+      body: JSON.stringify(reqBody),
     })
     if (!res.ok) throw new Error('HTTP ' + res.status)
 
@@ -263,7 +277,10 @@ async function send() {
         const payload = line.slice(5).trim()
         if (payload === '[DONE]') continue
         try {
-          const delta = JSON.parse(payload).choices?.[0]?.delta?.content
+          const d = JSON.parse(payload).choices?.[0]?.delta || {}
+          // 思维链不给同学看（DESIGN：一句"深度思考中"比满屏推理文本友好），只在还没出正文时占位
+          if (d.reasoning_content && !acc) out.textContent = '深度思考中…'
+          const delta = d.content
           if (delta) {
             acc += delta
             if (!routed && !ruleMark && acc.startsWith('[动手]')) routed = true
