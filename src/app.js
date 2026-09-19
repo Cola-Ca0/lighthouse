@@ -10,7 +10,8 @@ const MODEL_DEEP = 'deepseek-v4-pro'  // 深度思考开关（9/19 实测：mode
 // 用户可改、可加；现场调教由 AI 自己写回文件。这里只留【应用协议】——路由与机制，不属于可编辑的人格。
 const SYSTEM_PROMPT = [
   '【干活路由】',
-  '1. 当用户的需求是要你动手操作工作区里的文件（新建/修改/删除/整理/查看目录、处理文档）时：回复必须以 [动手] 开头，紧跟具体任务指令（写清要做什么、涉及哪个文件，写给执行员看），不要假装自己已经做了，也不要额外解释。其它情况正常聊天，不加这个前缀。',
+  '1. 当用户的需求是要你动手操作工作区里的文件（新建/修改/删除/整理/查看目录、处理文档）时：回复必须以 [动手] 开头，紧跟具体任务指令（写清要做什么、涉及哪个文件，写给执行员看），不要假装自己已经做了，也不要额外解释。',
+  '1b. 需要**从外边查来的最新信息**时也要 [动手]——天气、新闻、今天几号、价格、最新版本、某个网页/链接里写了什么：执行员能联网搜、能开网页。别自己答「我查不了/我没联网」，那是把能办的事推掉了。反过来，纯知识问题（概念、怎么用、原理）自己答，别绕远。',
   '',
   '【关于记忆 —— 重要】',
   '2. 你和同学的聊天记录会一直保存（关掉软件再打开还在）；对话太长时会自动压成摘要 + 重要的事记进「小抄」，所以你记得以前聊过的内容。别再说「我一关掉就忘了」「下次见面是白纸」这类话。',
@@ -198,6 +199,13 @@ function fillBubble(el, text) {
 }
 function setBubble(el, text) { el.textContent = ''; fillBubble(el, text) }
 
+// 模型偶尔会在回复最前面吐一段内部块（实测：<ds_safety>…</ds_safety> 安全分类标注）。
+// 那不该给同学看，也会顶掉 [动手]/[记规则] 的开头判定——先剥掉再判断/显示。
+function cleanOut(text) {
+  const t = String(text).replace(/^\s*<ds_safety>[\s\S]*?<\/ds_safety>\s*/i, '')
+  return /^\s*</.test(t) ? '' : t      // 标签还在传（没闭合），先别显，免得露半截
+}
+
 function addMsg(role, text) {
   const wrap = document.createElement('div')
   wrap.className = 'msg ' + role
@@ -375,23 +383,25 @@ async function send() {
           const delta = d.content
           if (delta) {
             acc += delta
-            if (!routed && !ruleMark && acc.startsWith('[动手]')) routed = true
-            if (!routed && !ruleMark && acc.startsWith('[记规则]')) ruleMark = true
-            if (!routed && !ruleMark) out.textContent = acc
+            const vis = cleanOut(acc)
+            if (!routed && !ruleMark && vis.startsWith('[动手]')) routed = true
+            if (!routed && !ruleMark && vis.startsWith('[记规则]')) ruleMark = true
+            if (!routed && !ruleMark) out.textContent = vis
             scrollToBottom()
           }
         } catch { /* 半截 JSON，下一轮缓冲补齐 */ }
       }
     }
+    const clean = cleanOut(acc)   // 剥掉模型偶尔吐的内部块，后面统一用这份
     if (ruleMark) {
       // 现场调教：把「以后……」写成规则文件里的一行，透明告知（红线豁免依据：这是 AI 自己的规矩本，
       // 不是同学的文件；不弹确认卡，但明说记了什么、写去了哪）
-      const nl = acc.indexOf('\n')
-      const ruleLine = (nl < 0 ? acc : acc.slice(0, nl)).replace(/^\[记规则\][:：]?\s*/, '').trim()
-      const rest = nl < 0 ? '' : acc.slice(nl + 1).trim()
+      const nl = clean.indexOf('\n')
+      const ruleLine = (nl < 0 ? clean : clean.slice(0, nl)).replace(/^\[记规则\][:：]?\s*/, '').trim()
+      const rest = nl < 0 ? '' : clean.slice(nl + 1).trim()
       if (!ruleLine) {
-        setBubble(out, acc)
-        storePush('bot', acc)
+        setBubble(out, clean)
+        storePush('bot', clean)
       } else {
         const ok = await window.lh.appendRule(ruleLine)
         if (rest) { setBubble(out, rest); storePush('bot', rest) }
@@ -403,8 +413,8 @@ async function send() {
         storePush('note', msg)
       }
     } else if (routed) {
-      const want = acc.replace(/^\[动手\]\s*/, '').trim()
-      if (!want) { setBubble(out, acc); storePush('bot', acc) }
+      const want = clean.replace(/^\[动手\]\s*/, '').trim()
+      if (!want) { setBubble(out, clean); storePush('bot', clean) }
       else {
         // 第一段：只做计划（红线——用户确认前不动手）
         out.textContent = '我先看看、理个方案…'
@@ -414,6 +424,8 @@ async function send() {
           + '格式要求：第一行只写 [只读] 或 [要写]，判断的是「用户这件事本身」要不要动文件——'
           + '看/查/回答就写 [只读]，要新建或修改文件就写 [要写]（这跟你现在只做计划、暂时不许写文件是两回事）；'
           + '第二行起才是计划正文。'
+          + '计划里只写这次真要做的步骤——别写假设句（「要是你想…我也可以…」）、别写「要不要顺便…」这类提议，'
+          + '也别提将来可选的额外动作，那些等用户开口再说。'
         const plan = await window.lh.runTask(planTask)
         if (!plan.ok) {
           out.textContent = '没事的没事的，这波不亏——刚才想方案的时候卡了：\n' + plan.text
@@ -425,7 +437,7 @@ async function send() {
           // fail-safe 方向——误判成"要写"只是多弹一张卡；误判成"只读"就成了没确认就动文件。
           // （2026-09-19 对抗审查：光信模型的自我声明，它把"做个 Word 再改错别字"都能标成只读）
           const affirmative = planBody.replace(
-            /不[会要需]?[^，。；\n]{0,4}?(修改|改动|新建|创建|删除|动|碰)|没[有]?[^，。；\n]{0,4}?(修改|改动|新建|删除|动|碰)|只[读看查]|纯[读看]|不碰|无需|不用/g, '')
+            /不[会要需]?[^，。；\n]{0,4}?(修改|改动|新建|创建|生成|做|写|保存|删除|删掉|移动|替换|添加|插入|排版|导出|动|碰|放)|没[有]?[^，。；\n]{0,4}?(修改|改动|新建|删除|生成|动|碰)|只[读看查]|纯[读看]|不碰|无需|不用/g, '')
           const looksWrite = /(新建|创建|生成|做一|制作|写入|写回|写进|添加|加上|插入|替换|删除|删掉|移动|重命名|保存|另存|导出|排版|合并|拆分|转成|整理成|改成|改掉|改好|改写|改动|修改|更新)/.test(affirmative)
           const readOnly = /^\[只读\]/.test(plan.text.trim()) && !looksWrite
           if (readOnly) {
@@ -466,13 +478,13 @@ async function send() {
           }
         }
       }
-    } else if (acc) {
-      setBubble(out, acc)            // 流式是纯文本，结束后按轻排版重画一遍
-      storePush('bot', acc)
+    } else if (clean) {
+      setBubble(out, clean)          // 流式是纯文本，结束后按轻排版重画一遍
+      storePush('bot', clean)
     }
   } catch (err) {
-    setBubble(out, acc
-      ? acc + '\n\n（信号好像断了一下…可以再问一次）'
+    setBubble(out, cleanOut(acc)
+      ? cleanOut(acc) + '\n\n（信号好像断了一下…可以再问一次）'
       : '信号好像断了，稍等一会儿再试试？')
   } finally {
     caret.remove()

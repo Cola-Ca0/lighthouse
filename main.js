@@ -128,12 +128,13 @@ function runTask(task) {
         NO_COLOR: '1',
       }),
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,   // 不设的话 Windows 会给这个控制台程序分配一个真窗口——任务开始时闪一下（2026-09-19 用户反馈）
     })
     let out = '', err = ''
     child.stdout.on('data', (c) => { out += c.toString() })
     child.stderr.on('data', (c) => { err += c.toString() })
     const timer = setTimeout(() => {
-      try { execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore' }) } catch {}
+      try { execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore', windowsHide: true }) } catch {}
       resolve({ ok: false, text: '这个活儿比平时久太多，我先停下了——要不要拆小一点再试？' })
     }, TASK_TIMEOUT)
     child.on('close', (code) => {
