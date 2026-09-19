@@ -1,0 +1,15 @@
+{
+  "name": "lighthouse",
+  "productName": "灯塔",
+  "version": "0.1.0",
+  "description": "灯塔 · 一个说人话的 AI 小助手",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Cola_CaO",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.4.2"
+  }
+}

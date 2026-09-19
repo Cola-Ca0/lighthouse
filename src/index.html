@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src https://api.deepseek.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>灯塔</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="titlebar">
+    <div class="brand">
+      <span class="light"></span>
+      <span class="name">lighthouse</span>
+    </div>
+    <div class="win-btns">
+      <button id="btn-rules" title="规则文件 —— Cola 的说话风格和规矩都在这（可以自己改）">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+      </button>
+      <button id="btn-folder" title="打开工作区文件夹">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+      </button>
+      <button id="btn-min" title="最小化">─</button>
+      <button id="btn-close" title="关闭" class="close">✕</button>
+    </div>
+  </header>
+
+  <main id="chat" class="chat"></main>
+
+  <footer class="composer">
+    <textarea id="input" rows="1" placeholder="说点什么…"></textarea>
+    <button id="send" title="发送">↑</button>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
