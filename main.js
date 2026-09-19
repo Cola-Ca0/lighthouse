@@ -237,6 +237,7 @@ function createWindow() {
     height: 760,
     minWidth: 400,
     minHeight: 560,
+    icon: path.join(__dirname, 'src', 'assets', 'avatar.png'),   // 窗口/任务栏图标（打包态用 exe 内嵌的 build/icon.ico）
     frame: false,               // 无边框 — 自绘标题栏（深海风）
     titleBarStyle: 'hidden',
     backgroundColor: '#0a1428',

@@ -51,7 +51,8 @@
           ]
         }
       ],
-      "artifactName": "灯塔-Setup-${version}.exe"
+      "artifactName": "灯塔-Setup-${version}.exe",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
@@ -61,6 +62,7 @@
       "shortcutName": "灯塔",
       "deleteAppDataOnUninstall": false
     },
-    "npmRebuild": false
+    "npmRebuild": false,
+    "icon": "build/icon.png"
   }
 }
