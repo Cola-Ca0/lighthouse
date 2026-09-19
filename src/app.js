@@ -5,7 +5,7 @@
 const API_URL = 'https://api.deepseek.com/chat/completions'
 const MODEL = 'deepseek-flash'   // 唯一模型：快、便宜、支持识图（v4-pro 不吃图片）
 
-// v0.3 起：人格与规矩（Cola 口吻 / 照顾同学 / 风格）全部迁到工作区的规则文件（workspace/AGENTS.md），
+// v0.3 起：人格与规矩（说话风格 / 照顾用户）全部迁到工作区的规则文件（workspace/AGENTS.md），
 // 用户可改、可加；现场调教由 AI 自己写回文件。这里只留【应用协议】——路由与机制，不属于可编辑的人格。
 const SYSTEM_PROMPT = [
   '【干活路由】',
@@ -13,14 +13,14 @@ const SYSTEM_PROMPT = [
   '1b. 需要**从外边查来的最新信息**时也要 [动手]——天气、新闻、今天几号、价格、最新版本、某个网页/链接里写了什么：执行员能联网搜、能开网页。别自己答「我查不了/我没联网」，那是把能办的事推掉了。反过来，纯知识问题（概念、怎么用、原理）自己答，别绕远。',
   '',
   '【关于记忆 —— 重要】',
-  '2. 你和同学的聊天记录会一直保存（关掉软件再打开还在）；对话太长时会自动压成摘要 + 重要的事记进「小抄」，所以你记得以前聊过的内容。别再说「我一关掉就忘了」「下次见面是白纸」这类话。',
+  '2. 你和用户的聊天记录会一直保存（关掉软件再打开还在）；对话太长时会自动压成摘要 + 重要的事记进「小抄」，所以你记得以前聊过的内容。别再说「我一关掉就忘了」「下次见面是白纸」这类话。',
   '3. 当对话很长需要整理时：先说一句「咱们聊得有点长了，我先把前面的重要内容整理成小抄」，然后再整理。',
   '',
   '【说话格式】',
   '4. 聊天窗口只做很轻的排版（**加粗**、`代码` 会正常显示，其它 Markdown 不会）：别写 # 标题、别用 - 列表、别弄表格。要分条就换行写「1. 2. 3.」或「·」，要强调就用「」。',
   '',
   '【关于规则 —— 重要】',
-  '4. 规则文件（本对话开头的「灯塔 · 规则」）就是你的规矩本，同学随时能改。同学说「以后……」「下次……」「别老是……一定要……」这类要你改变说话方式、习惯、做法的话时：回复第一行以 [记规则] 开头，紧跟要记住的规则原文（一行、简短、写给未来的你看，比如「回答更短一点」）；如果还有别的话要回，另起一行正常说。其它情况不加这个前缀。',
+  '4. 规则文件（本对话开头的「助手 · 规则」）就是你的规矩本，用户随时能改。用户说「以后……」「下次……」「别老是……一定要……」这类要你改变说话方式、习惯、做法的话时：回复第一行以 [记规则] 开头，紧跟要记住的规则原文（一行、简短、写给未来的你看，比如「回答更短一点」）；如果还有别的话要回，另起一行正常说。其它情况不加这个前缀。',
 ].join('\n')
 
 const chatEl = document.getElementById('chat')
@@ -46,7 +46,7 @@ function toApiMsgs() {
 }
 function systemWithMemory(rulesText) {
   const parts = []
-  if (rulesText) parts.push('【灯塔 · 规则（同学定的规矩）】\n' + rulesText.slice(0, 6000))
+  if (rulesText) parts.push('【规则（用户定的规矩）】\n' + rulesText.slice(0, 6000))
   parts.push(SYSTEM_PROMPT)
   if (memory) parts.push('【小抄（之前记下的）】\n' + memory.slice(-4000))
   return parts.join('\n\n')
@@ -59,15 +59,7 @@ function systemWithMemory(rulesText) {
   memory = await window.lh.getMemory()
   ui = (await window.lh.loadChat()) || []
   if (ui.length === 0) {
-    addBot([
-      '你好呀 ✦',
-      '我是 Cola 的 AI 分身——不只会聊天，还能帮你干活。',
-      '',
-      '· 想问什么直接问：学习、写东西、查资料都行',
-      '· 有文件要处理（Word / Excel / PPT / 图片），拖进这个窗口就行',
-      '· 让我动文件之前，我会先把打算做什么给你过目，你点头我才动手',
-      '· 想让我换个说话方式，跟我说「以后……」我就记下了',
-    ].join('\n'))
+    addBot(await window.lh.getGreeting())   // 开场白来自人设（persona.local.json 或中立模板）
   } else {
     for (const m of ui) {
       if (m.role === 'user') addUser(m.text)
@@ -82,7 +74,7 @@ function systemWithMemory(rulesText) {
 document.getElementById('btn-folder').onclick = () => window.lh.openWorkspace()
 document.getElementById('btn-rules').onclick = () => window.lh.openRules()
 
-// 深度思考开关已退役（2026-09-19 用户拍板）：全站只用 flash——同学问的都是日常问题，
+// 深度思考开关已退役（2026-09-19 用户拍板）：全站只用 flash——日常问题够用，
 // flash 更快更便宜，而且它是唯一支持识图的那个（v4-pro 不吃图片）。
 
 // ---------- 外观（v0.5）：自定义壁纸 + 玻璃透明度（localStorage 记住） ----------
@@ -198,7 +190,7 @@ function fillBubble(el, text) {
 function setBubble(el, text) { el.textContent = ''; fillBubble(el, text) }
 
 // 模型偶尔会在回复最前面吐一段内部块（实测：<ds_safety>…</ds_safety> 安全分类标注）。
-// 那不该给同学看，也会顶掉 [动手]/[记规则] 的开头判定——先剥掉再判断/显示。
+// 那不该给用户看，也会顶掉 [动手]/[记规则] 的开头判定——先剥掉再判断/显示。
 function cleanOut(text) {
   const t = String(text).replace(/^\s*<ds_safety>[\s\S]*?<\/ds_safety>\s*/i, '')
   return /^\s*</.test(t) ? '' : t      // 标签还在传（没闭合），先别显，免得露半截
@@ -375,7 +367,7 @@ async function send() {
         if (payload === '[DONE]') continue
         try {
           const d = JSON.parse(payload).choices?.[0]?.delta || {}
-          // 模型偶尔也会吐思维链——不给同学看（一句占位比满屏推理文本友好）
+          // 模型偶尔也会吐思维链——不给用户看（一句占位比满屏推理文本友好）
           if (d.reasoning_content && !acc) out.textContent = '让我想想…'
           const delta = d.content
           if (delta) {
@@ -392,7 +384,7 @@ async function send() {
     const clean = cleanOut(acc)   // 剥掉模型偶尔吐的内部块，后面统一用这份
     if (ruleMark) {
       // 现场调教：把「以后……」写成规则文件里的一行，透明告知（红线豁免依据：这是 AI 自己的规矩本，
-      // 不是同学的文件；不弹确认卡，但明说记了什么、写去了哪）
+      // 不是用户的文件；不弹确认卡，但明说记了什么、写去了哪）
       const nl = clean.indexOf('\n')
       const ruleLine = (nl < 0 ? clean : clean.slice(0, nl)).replace(/^\[记规则\][:：]?\s*/, '').trim()
       const rest = nl < 0 ? '' : clean.slice(nl + 1).trim()

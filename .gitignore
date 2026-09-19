@@ -10,3 +10,5 @@ runtime/
 src/assets/avatar.png
 build/icon.ico
 build/icon.png
+persona.local.json
+DESIGN.md

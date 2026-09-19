@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('lh', {
   getMemory: () => ipcRenderer.invoke('get-memory'),
   appendMemory: (text) => ipcRenderer.invoke('append-memory', text),
   getRules: () => ipcRenderer.invoke('get-rules'),
+  getGreeting: () => ipcRenderer.invoke('get-greeting'),
   appendRule: (line) => ipcRenderer.invoke('append-rule', line),
   openRules: () => ipcRenderer.invoke('open-rules'),
   getEngineHint: () => ipcRenderer.invoke('get-engine-hint'),

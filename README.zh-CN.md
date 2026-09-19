@@ -23,7 +23,7 @@ npm install
 
 # 1) 放钥匙：在项目根目录建 config.json
 echo '{ "apiKey": "你的 DeepSeek API Key" }' > config.json
-#    （没有的话会退回读 ~/.dsh 或 Cola Hub 的 settings.json，见 main.js 的 readKey）
+#    （没有的话会退回读 ~/.dsh 的 settings.json，见 main.js 的 readKey）
 
 # 2) 干活引擎需要一个「控制台子系统」的真 Node（不是 Electron 的 node 模式）
 #    从 https://npmmirror.com/mirrors/node/ 下一个 win-x64 包，把 node.exe 放到 runtime/

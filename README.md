@@ -23,7 +23,7 @@ npm install
 
 # 1) Provide an API key: create config.json in the project root
 echo '{ "apiKey": "your-deepseek-api-key" }' > config.json
-#    (falls back to ~/.dsh or Cola Hub's settings.json — see readKey() in main.js)
+#    (falls back to ~/.dsh/settings.json — see readKey() in main.js)
 
 # 2) The work engine needs a real Node (console-subsystem), not Electron's node mode.
 #    Grab a win-x64 build from https://npmmirror.com/mirrors/node/ and put node.exe in runtime/
