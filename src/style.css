@@ -78,6 +78,39 @@ body {
 }
 .win-btns .close:hover { background: rgba(240, 128, 96, 0.14); color: var(--danger); }
 
+/* ---------------- 外观浮层（v0.5） ---------------- */
+.popover {
+  position: absolute; top: 54px; right: 8px; z-index: 20;
+  min-width: 236px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: rgba(14, 26, 46, 0.96);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: 0 8px 24px rgba(4, 10, 22, 0.5);
+}
+.popover[hidden] { display: none; }
+.pop-row { display: flex; align-items: center; gap: 8px; }
+.pop-label { flex: none; font-size: 12px; color: var(--text-dim); }
+.pbtn {
+  flex: 1; height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50px;                 /* Shape Tier: 交互元素 pill 50px */
+  background: rgba(91, 160, 224, 0.10); color: var(--text);
+  font-size: 12px; cursor: pointer;
+  transition: background .15s;
+}
+.pbtn:hover { background: rgba(91, 160, 224, 0.20); }
+.pbtn.ghost { background: transparent; color: var(--text-dim); }
+.pbtn.ghost:hover { background: rgba(91, 160, 224, 0.10); color: var(--text); }
+#glass { flex: 1; accent-color: var(--accent); }
+
+/* 自定义壁纸：深色压一层，保住深海对比度（内联 backgroundImage 决定图，这里管铺法） */
+body.has-wall {
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
 /* ---------------- 消息流 ---------------- */
 .chat {
   flex: 1;

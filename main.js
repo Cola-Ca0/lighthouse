@@ -1,7 +1,7 @@
 // Lighthouse · 灯塔 — 主进程
 // 职责只有三件：开窗、给 key、窗口控制。
 // API 调用在前端直连（DeepSeek 开放 CORS，2026-09-18 参考 yif2012 项目验证）。
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
 const { spawn, execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
@@ -74,6 +74,28 @@ function runTask(task) {
   })
 }
 
+// 自定义壁纸（v0.5）：选好就复制进 data/（原图之后挪走/删掉都不怕），渲染进程拿 data URL 画背景
+const WALL_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'bmp']
+const WALL_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp' }
+
+function wallpaperFile() {
+  try {
+    for (const f of fs.readdirSync(DATA_DIR)) {
+      const ext = path.extname(f).slice(1).toLowerCase()
+      if (f.startsWith('wallpaper.') && WALL_EXTS.includes(ext)) return path.join(DATA_DIR, f)
+    }
+  } catch {}
+  return ''
+}
+function wallpaperDataUrl() {
+  const p = wallpaperFile()
+  if (!p) return ''
+  try {
+    return 'data:' + WALL_MIME[path.extname(p).slice(1).toLowerCase()] + ';base64,'
+      + fs.readFileSync(p).toString('base64')
+  } catch { return '' }
+}
+
 // key 读取顺序：① 项目本地 config.json（分发预置 / 本地手配）
 //              ② Hub settings.json（开发态复用站长已有 key，零配置）
 function readKey() {
@@ -138,6 +160,26 @@ app.whenReady().then(() => {
     } catch { return false }
   })
   ipcMain.handle('open-rules', () => shell.openPath(RULES_PATH))
+  ipcMain.handle('get-wallpaper', () => wallpaperDataUrl())
+  ipcMain.handle('pick-wallpaper', async () => {
+    const r = await dialog.showOpenDialog({
+      title: '选一张背景图',
+      properties: ['openFile'],
+      filters: [{ name: '图片', extensions: WALL_EXTS }],
+    })
+    const src = r.filePaths[0]
+    if (r.canceled || !src) return ''
+    try {
+      const old = wallpaperFile()
+      if (old) fs.unlinkSync(old)          // 一张就够，换图即替换
+      fs.copyFileSync(src, path.join(DATA_DIR, 'wallpaper.' + path.extname(src).slice(1).toLowerCase()))
+      return wallpaperDataUrl()
+    } catch { return '' }
+  })
+  ipcMain.handle('clear-wallpaper', () => {
+    try { const p = wallpaperFile(); if (p) fs.unlinkSync(p) } catch {}
+    return ''
+  })
   ipcMain.handle('load-chat', () => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'chat.json'), 'utf8')) } catch { return [] } })
   ipcMain.handle('save-chat', (_e, msgs) => { try { fs.writeFileSync(path.join(DATA_DIR, 'chat.json'), JSON.stringify(msgs)) } catch {} })
   ipcMain.handle('get-memory', () => { try { return fs.readFileSync(path.join(DATA_DIR, '记忆.md'), 'utf8') } catch { return '' } })

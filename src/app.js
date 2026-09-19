@@ -79,6 +79,44 @@ thinkBtn.onclick = () => {
   renderThink()
 }
 renderThink()
+
+// ---------- 外观（v0.5）：自定义壁纸 + 玻璃透明度（localStorage 记住） ----------
+const appearEl = document.getElementById('appear')
+const glassEl = document.getElementById('glass')
+
+function applyGlass(pct) {
+  const a = Math.min(95, Math.max(30, Number(pct) || 72))
+  document.documentElement.style.setProperty('--surface', 'rgba(18, 32, 54, ' + (a / 100) + ')')
+  document.documentElement.style.setProperty('--surface-user', 'rgba(91, 160, 224, ' + (a / 100 * 0.18).toFixed(3) + ')')
+}
+function applyWallpaper(url) {
+  document.body.classList.toggle('has-wall', !!url)
+  // 图上面压一层深色——壁纸再好看，也得让字清楚
+  document.body.style.backgroundImage = url
+    ? 'linear-gradient(rgba(8, 18, 34, 0.66), rgba(8, 18, 34, 0.66)), url("' + url + '")'
+    : ''
+}
+glassEl.oninput = () => {
+  applyGlass(glassEl.value)
+  localStorage.setItem('lh.glass', glassEl.value)
+}
+document.getElementById('btn-appear').onclick = () => { appearEl.hidden = !appearEl.hidden }
+document.addEventListener('click', (e) => {
+  if (!appearEl.hidden && !appearEl.contains(e.target) && !e.target.closest('#btn-appear')) appearEl.hidden = true
+})
+document.getElementById('btn-wall').onclick = async () => {
+  const url = await window.lh.pickWallpaper()
+  if (url) applyWallpaper(url)
+}
+document.getElementById('btn-wall-reset').onclick = async () => {
+  await window.lh.clearWallpaper()
+  applyWallpaper('')
+}
+
+const savedGlass = localStorage.getItem('lh.glass') || '72'
+glassEl.value = savedGlass
+applyGlass(savedGlass)
+;(async () => applyWallpaper(await window.lh.getWallpaper()))()
 document.getElementById('btn-min').onclick = () => window.lh.minimize()
 document.getElementById('btn-close').onclick = () => window.lh.close()
 

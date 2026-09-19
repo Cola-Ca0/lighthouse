@@ -15,6 +15,9 @@
       <span class="name">lighthouse</span>
     </div>
     <div class="win-btns">
+      <button id="btn-appear" title="外观 —— 换背景图、调玻璃透明度">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="2"/><path d="M21 15.5l-4.5-4.5L7 20.5"/></svg>
+      </button>
       <button id="btn-think" class="toggle" title="深度思考 —— 遇到搞不定的难题再开：更聪明，但慢一点">深度思考</button>
       <button id="btn-rules" title="规则文件 —— Cola 的说话风格和规矩都在这（可以自己改）">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
@@ -26,6 +29,17 @@
       <button id="btn-close" title="关闭" class="close">✕</button>
     </div>
   </header>
+
+  <div id="appear" class="popover" hidden>
+    <div class="pop-row">
+      <button id="btn-wall" class="pbtn">换一张背景图</button>
+      <button id="btn-wall-reset" class="pbtn ghost">恢复默认</button>
+    </div>
+    <div class="pop-row">
+      <span class="pop-label">玻璃透明度</span>
+      <input id="glass" type="range" min="30" max="95" step="1" value="72" title="拖一拖，看气泡的透明程度">
+    </div>
+  </div>
 
   <main id="chat" class="chat"></main>
 
