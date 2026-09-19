@@ -3,8 +3,7 @@
 // 流式：直连 DeepSeek API（CORS 开放已验证），带缓冲的 SSE 解析（跨 chunk 不丢数据）
 
 const API_URL = 'https://api.deepseek.com/chat/completions'
-const MODEL = 'deepseek-flash'        // 日常：快、便宜
-const MODEL_DEEP = 'deepseek-v4-pro'  // 深度思考开关（9/19 实测：models 端点确认；推理走 reasoning_content，不显示给同学）
+const MODEL = 'deepseek-flash'   // 唯一模型：快、便宜、支持识图（v4-pro 不吃图片）
 
 // v0.3 起：人格与规矩（Cola 口吻 / 照顾同学 / 风格）全部迁到工作区的规则文件（workspace/AGENTS.md），
 // 用户可改、可加；现场调教由 AI 自己写回文件。这里只留【应用协议】——路由与机制，不属于可编辑的人格。
@@ -75,16 +74,8 @@ function systemWithMemory(rulesText) {
 document.getElementById('btn-folder').onclick = () => window.lh.openWorkspace()
 document.getElementById('btn-rules').onclick = () => window.lh.openRules()
 
-// ---------- 深度思考开关（v0.4）：localStorage 记住选择，关掉软件再开还在 ----------
-let deepThink = localStorage.getItem('lh.deepThink') === '1'
-const thinkBtn = document.getElementById('btn-think')
-const renderThink = () => thinkBtn.classList.toggle('on', deepThink)
-thinkBtn.onclick = () => {
-  deepThink = !deepThink
-  localStorage.setItem('lh.deepThink', deepThink ? '1' : '0')
-  renderThink()
-}
-renderThink()
+// 深度思考开关已退役（2026-09-19 用户拍板）：全站只用 flash——同学问的都是日常问题，
+// flash 更快更便宜，而且它是唯一支持识图的那个（v4-pro 不吃图片）。
 
 // ---------- 外观（v0.5）：自定义壁纸 + 玻璃透明度（localStorage 记住） ----------
 const appearEl = document.getElementById('appear')
@@ -343,13 +334,12 @@ async function send() {
 
   try {
     const reqBody = {
-      model: deepThink ? MODEL_DEEP : MODEL,
+      model: MODEL,
       messages: [{ role: 'system', content: systemWithMemory(rulesText) }, ...toApiMsgs()],
       stream: true,
-      // 推理 token 计入 completion_tokens（实测），深度思考留出思考空间
-      max_tokens: deepThink ? 8192 : 2048,
+      temperature: 1.1,
+      max_tokens: 2048,
     }
-    if (!deepThink) reqBody.temperature = 1.1   // 推理模型不吃 temperature（不传即默认）
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: {
@@ -378,8 +368,8 @@ async function send() {
         if (payload === '[DONE]') continue
         try {
           const d = JSON.parse(payload).choices?.[0]?.delta || {}
-          // 思维链不给同学看（DESIGN：一句"深度思考中"比满屏推理文本友好），只在还没出正文时占位
-          if (d.reasoning_content && !acc) out.textContent = '深度思考中…'
+          // 模型偶尔也会吐思维链——不给同学看（一句占位比满屏推理文本友好）
+          if (d.reasoning_content && !acc) out.textContent = '让我想想…'
           const delta = d.content
           if (delta) {
             acc += delta
