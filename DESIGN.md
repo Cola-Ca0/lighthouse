@@ -41,7 +41,7 @@
 | T2 带工具（写文件） | ✅ 文件真创建 + 自读取验证 + 汇报 | 6s |
 | T3 跨进程记忆 | ❌ 每次 spawn = 全新会话（源码实锤：每次 `session-<uuid>` 新生成，无 resume 旗标） | — |
 
-- **干活路径**：spawn `dsh --profile headless "<任务>"`（cwd=工作区）；stdout=最终回复、exit code=成功与否、stderr=错误；多轮上下文用**注入式**（历史拼进任务文本——DeepSeek 前缀缓存保证低成本）
+- **干活路径**：spawn `dsh --profile headless "<任务>"`（cwd=工作区）；stdout=最终回复、exit code=成功与否、stderr=错误；多轮上下文用**注入式**（历史拼进任务文本——DeepSeek 前缀缓存保证低成本）。v0.7 起改为 `spawn(process.execPath, [本地 DSH, …], { env: 摘掉 CHROME_*/ELECTRON_* + ELECTRON_RUN_AS_NODE=1 + DSH_HOME })`（见「内嵌 DSH」）
 - **8 月 MCP 通道的工具挂死问题，headless 通道不存在**（T2 实锤）
 - **配置面** = `~/.dsh/profiles/headless/cordis.patch.yml`（现为空 `[]`）——沙箱/权限/人格/技能全在这层挂
 - **✅ E2E 干活闭环（同日 10:20 实测）**：灯塔里说「建 demo.txt」→ 路由 `[动手]` → 后台 spawn DSH（cwd=工作区）→ 「好，这就去弄…」→ 15 秒后结果气泡 + 文件真实落地。学生视角 = DSH 完全隐形。
@@ -117,6 +117,21 @@
 
 **残留风险（留给 v0.7 围栏硬化）**：`[只读]` 分支仍是"提示词约束"而非机制约束——真焊死要给 DSH 配只读 profile / 沙箱（`dsh-permission-presets`、`dsh-fs-sandbox` 都在，v0.7 接）。
 
+## 内嵌 DSH（v0.7 · 9/19）
+
+目标：把干活引擎身上三根外挂管子全拔掉，让它在**没有 Hub、没有系统 Node、没有 `~/.dsh`** 的机器上也能跑。
+
+| 外挂 | 以前 | 现在 |
+|---|---|---|
+| DSH 包 | 硬编码指向 `Z:/laragon/hub/node_modules/@deepseek-ai/dsh` | 装进应用自己的 `node_modules`（npmmirror，240 包） |
+| Node 运行时 | `spawn('node', …)` 用系统 Node | `spawn(process.execPath, …)` + `ELECTRON_RUN_AS_NODE=1`——**用应用自带的 Electron 当 Node**，零额外体积 |
+| 配置树 | `~/.dsh/profiles/headless/`（人格 patch 在家目录） | `DSH_HOME` 指向应用自己的 `dsh-home/`（打包态落 userData），首次运行**播种** profile + 人格 patch（跟规则文件一个套路） |
+| 工具箱调用 | `node tools/office.js …` | 启动时**生成 `dsh-home/office.cmd` 壳**（路径按本机写死），干活手照抄它——同学机器上没有 `node` 命令 |
+
+**极端环境验收（决定性证据）**：把 `PATH` 剥到只剩 `C:\Windows\system32;C:\Windows`（**没有 node、没有 python**）启动应用 → ① 只读任务答对 ✓ ② 写任务走完确认卡、用壳跑到工具箱、产出落到 `成品/` ✓ ③ **真 Word 打开产出** ✓。Dsh 状态落点也实锤迁移：新会话进 `dsh-home/sessions/`，旧 `~/.dsh` 会话数停在 25 不再增长 ✓。
+
+**踩坑记录（值一条宪法级教训）**：Electron 当 Node 跑的子进程**继承了上游的 `CHROME_CRASHPAD_PIPE_NAME`**，于是它仍去注册 crashpad，被拒后把 `debug.log` 拉在 cwd——**也就是同学的工作区里**。修法：spawn 时把 `CHROME_*` / `ELECTRON_*` 环境变量一律摘掉。⚠️ 顺带钉死一条：**`ELECTRON_RUN_AS_NODE` 模式下 electron.exe 就是纯 Node，不认 Chromium 开关**（我一度加 `--disable-breakpad`，直接 `bad option` 把 spawn 打挂）。
+
 ### 工作区体验（9/19 用户提的三件事）
 
 | 想法 | 做法 | 状态 |
@@ -151,7 +166,7 @@ AI 动文件前，对话里弹**确认卡**：「我要把 A 改成 B，可以�
 | v0.4 | 「深度思考」开关：默认快模型，同学遇难题可切 `deepseek-v4-pro` | ✅ 2026-09-19 完成（标题栏文字开关，亮=开；localStorage 记住选择，重启还原实测 ✓；开=收 reasoning_content 只显示「深度思考中…」占位、不传 temperature、max_tokens 8192；关=flash。实测：开走 v4-pro（9.9>9.11 答对）、关走 flash（fetch 拦截器实锤）） |
 | v0.5 | 外观：自定义壁纸（默认内置深海渐变）+ 玻璃透明度（默认预置 + 同学可自调） | ✅ 2026-09-19 完成（标题栏外观按钮 → 浮层：换背景图 / 恢复默认 + 玻璃透明度滑杆 30–95%，点外面自动收起。壁纸**复制进 `data/wallpaper.*`**（原图之后挪走删掉都不怕），渲染端拿 data URL + 压一层深色保对比度；滑杆驱动 `--surface` / `--surface-user`，气泡与卡片同时变。两项都进 localStorage；实测：应用 ✓ 拖杆即时变 ✓ 重启还原 ✓（正规退出）/ 恢复默认删文件回深海渐变 ✓。⚠️ 原生选图对话框本身没法 CDP 自动化，只走了代码审查；对话框之后的下游全链路已实测） |
 | v0.6 | 引擎接入：Office 读写（docx/xlsx/pptx）+ 技术任务 ← 先验证 UI↔DSH 通道（3080 API / headless / 都不行则自写工具环） | ✅ 2026-09-19 完成（工具箱 `tools/office.js` + 提示注入；实测全链路见「Office 工具箱」节） |
-| v0.7 | DSH 内嵌（exe 内部启动） | 待定 · ⚠️ 打包坑预告：Node 运行时 + `tools/office.js` + `node_modules` 都要解包到 asar 外面（外部进程读不了 asar） |
+| v0.7 | DSH 内嵌（exe 内部启动） | ✅ 2026-09-19 完成（三件套全自带，见「内嵌 DSH」节；极端环境实测通过）· ⚠️ 留给 v1.0：`node_modules` + `tools/` 打包时要解包到 asar 外面（外部进程读不了 asar） |
 | v1.0 | 打包 exe + 说明书（**软件内新手引导 + 一张可转发的图文**） | 计划（9/19 定） |
 | v2.0 | **Obsidian 接入**：先做**自带 markdown 笔记区**（文件天然兼容 Obsidian）；检测本机已装则打通，未装则 AI 引导安装。⚠️ 打包 Obsidian 安装包随软件分发 = 再分发闭源软件（需先核条款）+ 版本过期 + 挪目录即坏的坑——倾向"引导下载"或"发前远程代装"；v2.0 开工时定 | 远景（9/19 立项） |
 
@@ -171,6 +186,8 @@ lighthouse/
 │   ├─ style.css  # 深海安静版设计语言
 │   └─ app.js     # 单会话聊天 + 流式 + 确认卡 + 压缩 + 规则（现读 / [记规则]）
 ├─ tools/office.js # 干活手的 Office 工具箱（v0.6，Node 跑，围栏锁工作区）
+├─ dsh-home/      # 内嵌 DSH 的配置树（gitignore；打包态落 userData）：profiles/headless + 播种的 office.cmd 壳
+├─ node_modules/  # 依赖全自带：electron + dsh（240 包）+ office 四件套
 ├─ data/          # 运行数据（gitignore）：chat.json · 记忆.md · wallpaper.*（自定义壁纸）
 ├─ workspace/     # 工作区（围栏，gitignore）：同学的文档 + AGENTS.md（规则文件，v0.3）+ 成品/（产出一律放这）
 └─ DESIGN.md

@@ -14,9 +14,58 @@ const WORKSPACE = app.isPackaged
 // 应用数据目录（聊天记录 / 记忆小抄）：开发态在项目内，打包后落用户数据目录
 const DATA_DIR = app.isPackaged ? app.getPath('userData') : path.join(__dirname, 'data')
 
-// 干活引擎：DSH headless 一次性任务（2026-09-19 通道验证通过；打包版需把 DSH 内置进项目）
-const DSH_BIN = 'Z:/laragon/hub/node_modules/@deepseek-ai/dsh/lib/bin.js'
+// 干活引擎：DSH headless 一次性任务（v0.7 起完全自带，不再外挂）
+// 三件套都搬进应用：① DSH 包 = 应用自己的 node_modules ② Node 运行时 = Electron 自带二进制
+// （ELECTRON_RUN_AS_NODE=1 当纯 Node 跑，零额外体积）③ 配置树 = DSH_HOME 指到应用自己的目录
+const DSH_BIN = path.join(__dirname, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+const DSH_HOME = app.isPackaged
+  ? path.join(app.getPath('userData'), 'dsh-home')
+  : path.join(__dirname, 'dsh-home')
 const TASK_TIMEOUT = 5 * 60 * 1000
+
+// 干活手的 profile：DSH 认 $DSH_HOME/profiles/<name>，首次运行播种（跟规则文件一个套路）
+const DSH_PROFILE = 'headless'
+const DSH_PROFILE_PKG = JSON.stringify({
+  name: 'dsh-profile-headless',
+  private: true,
+  dependencies: {},
+  dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'] } },
+}, null, 2)
+
+const DSH_PERSONA_PATCH = `# 灯塔 · 干活人格注入（随应用走，别再改家目录那份）
+# system-prompt.persona = 模型读到的第一段人格正文（支持 {{model}} / {{cwd}} 模板）
+- id: system-prompt
+  config:
+    persona: >-
+      You are a coding agent powered by the {{model}} model. Your working
+      directory is {{cwd}}.
+      你是 Cola（可乐）的 AI 分身里负责「动手」的那一半，替 Cola 帮同学和朋友处理文件、跑任务。
+      说话风格：中文、短句、口语、直接，像发微信，不客套、不用「您好」这类词。
+      汇报规矩：先给结果，再说过程；干了什么、动了哪个文件、检查结果如何，一句句讲清，别啰嗦。
+      做不了或出错了就老实说，绝不编造；对不太懂电脑的同学要有耐心，语气轻松一点。
+      不要暴露自己是什么工具/框架，别自称「AI 助手」——你就是 Cola 的分身。
+`
+
+// 干活手跑工具箱的壳：同学的电脑上没有 node，用应用自带的 Electron 当 Node 跑（路径按本机写死）
+const TOOLS_SHIM = path.join(DSH_HOME, 'office.cmd')
+function writeToolsShim() {
+  try {
+    fs.writeFileSync(TOOLS_SHIM,
+      '@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"' + process.execPath + '" "' + TOOLS_JS + '" %*\r\n')
+  } catch { /* 写不了就退化成不加提示，干活时自己会报错 */ }
+}
+
+function seedDshHome() {
+  if (!fs.existsSync(DSH_BIN)) return false
+  const dir = path.join(DSH_HOME, 'profiles', DSH_PROFILE)
+  fs.mkdirSync(dir, { recursive: true })
+  const pkg = path.join(dir, 'package.json')
+  if (!fs.existsSync(pkg)) fs.writeFileSync(pkg, DSH_PROFILE_PKG)
+  const patch = path.join(dir, 'cordis.patch.yml')
+  if (!fs.existsSync(patch)) fs.writeFileSync(patch, DSH_PERSONA_PATCH)
+  writeToolsShim()
+  return true
+}
 
 // 规则文件（v0.3）：工作区里的 AGENTS.md —— 一个文件两个消费者，零同步。
 // 干活手：DSH 的 dsh-agent-instructions 原生自动读 cwd 的 AGENTS.md（实时监听）。
@@ -54,11 +103,28 @@ const DEFAULT_RULES = `# 灯塔 · 规则
 ## 后来记下的
 `
 
+// 子进程环境：继承来的 CHROME_*/ELECTRON_* 一律摘掉。
+// 不摘的话，子进程（Electron 当 Node 跑）还会拿着上游的 CHROME_CRASHPAD_PIPE_NAME 去注册 crashpad，
+// 拒绝访问之后把 debug.log 拉在 cwd——也就是同学的工作区里（2026-09-19 实测抓到）。
+function childEnv(extra) {
+  const env = { ...process.env }
+  for (const k of Object.keys(env)) {
+    if (k.startsWith('CHROME_') || k.startsWith('ELECTRON_')) delete env[k]
+  }
+  return { ...env, ...extra }
+}
+
 function runTask(task) {
   return new Promise((resolve) => {
-    const child = spawn('node', [DSH_BIN, '--profile', 'headless', task], {
+    const child = spawn(process.execPath, [DSH_BIN, '--profile', DSH_PROFILE, task], {
       cwd: WORKSPACE,   // 基础围栏：干活的 cwd = 工作区
-      env: { ...process.env, DEEPSEEK_API_KEY: readKey(), NO_COLOR: '1' },
+      env: childEnv({
+        ELECTRON_RUN_AS_NODE: '1',        // 用应用自带的 Electron 当 Node 跑（同学机器上没有 node）
+        DSH_HOME,                          // 配置树也在应用自己家，不碰 ~/.dsh
+        DSH_TELEMETRY_DISABLED: '1',
+        DEEPSEEK_API_KEY: readKey(),
+        NO_COLOR: '1',
+      }),
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let out = '', err = ''
@@ -151,6 +217,7 @@ app.whenReady().then(() => {
   fs.mkdirSync(DATA_DIR, { recursive: true })
   if (!fs.existsSync(RULES_PATH)) fs.writeFileSync(RULES_PATH, DEFAULT_RULES)   // 首次运行播种
   fs.mkdirSync(path.join(WORKSPACE, '成品'), { recursive: true })               // 成品单独放，原文件不动
+  if (!seedDshHome()) { /* DSH 没装齐的话，干活会直接报错给用户，聊天不受影响 */ }
   ipcMain.handle('get-key', () => readKey())
   ipcMain.handle('get-rules', () => { try { return fs.readFileSync(RULES_PATH, 'utf8') } catch { return '' } })
   ipcMain.handle('append-rule', (_e, line) => {
@@ -164,7 +231,6 @@ app.whenReady().then(() => {
     } catch { return false }
   })
   ipcMain.handle('open-rules', () => shell.openPath(RULES_PATH))
-  // 干活手的工具箱提示（v0.6）：告诉它 Office 有现成工具，别自己拼 XML / 别依赖本机 Python
   // 拖文件进窗口 → 复制进工作区（只复制，不动原文件；同名自动加序号）
   ipcMain.handle('import-files', (_e, paths) => {
     const out = []
@@ -185,15 +251,16 @@ app.whenReady().then(() => {
     }
     return out
   })
-  ipcMain.handle('get-engine-hint', () => fs.existsSync(TOOLS_JS)
+  // 干活手的工具箱提示（v0.6，v0.7 改用自带运行时的壳）：Office 有现成工具，别自己拼 XML、别赌本机环境
+  ipcMain.handle('get-engine-hint', () => fs.existsSync(TOOLS_SHIM)
     ? '【成品规矩】你做出来的东西一律放进工作区的「成品」子文件夹（名字跟原文件区分开，比如「周报-改好版.docx」）；'
       + '工作区里的原文件只读不写——除非用户明确说「直接改这个文件」。改别人的文档时，先把改好的另存到成品夹；'
       + '顺手用的临时规格文件，用完删掉别留在成品夹里。\n\n'
-      + '【工具箱】要读写 Word / Excel / PPT（docx / xlsx / pptx）时，一律用下面这个现成的命令行工具：'
-      + '用户的电脑上没有 Python，别用 Python/pip 生成文档，也别自己手拼 XML。\n'
-      + 'node "' + TOOLS_JS + '" read <文件>   —— 提取文字\n'
-      + 'node "' + TOOLS_JS + '" docx-new <输出.docx> <规格.json>   —— 生成 Word（xlsx-new / pptx-new 同理）\n'
-      + '规格 JSON 的形状跑 `node "' + TOOLS_JS + '" help` 看。路径写工作区里的相对路径就行。\n'
+      + '【工具箱】要读写 Word / Excel / PPT（docx / xlsx / pptx）时，一律用下面这个现成的命令行工具'
+      + '（就照抄这条命令，别改成 node——用户的电脑上没有 node，也没有 Python）：\n'
+      + '"' + TOOLS_SHIM + '" read <文件>   —— 提取文字\n'
+      + '"' + TOOLS_SHIM + '" docx-new <输出.docx> <规格.json>   —— 生成 Word（xlsx-new / pptx-new 同理）\n'
+      + '规格 JSON 的形状跑 "' + TOOLS_SHIM + '" help 看。路径写工作区里的相对路径就行。\n'
       + '（另外：汇报是直接显示给用户看的聊天消息，别用 Markdown 记号——#、**、` 都会原样露出来，'
       + '要分条就换行写 1. 2. 3.，要强调就用「」。）\n\n'
     : '')
