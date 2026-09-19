@@ -6,3 +6,7 @@ dist/
 *.log
 .scratch/
 dsh-home/
+runtime/
+src/assets/avatar.png
+build/icon.ico
+build/icon.png
