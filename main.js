@@ -116,9 +116,28 @@ function childEnv(extra) {
   return { ...env, ...extra }
 }
 
+// 运行时选择：优先用真 Node —— 它是控制台子系统程序，配 windowsHide 起 = 整棵进程树共享一个
+// 隐藏控制台，子进程不再各自新建（也就不会在 Win11 上弹 Windows Terminal 窗口）。
+// 退回 Electron 当 Node 也能跑，但它是 GUI 子系统程序、没有控制台可继承 → 每跑一条命令闪一个终端窗。
+// （2026-09-19 用 EnumWindows 抓窗口实测证实：换真 Node 后窗口数为 0。）
+function resolveNode() {
+  const cands = [
+    process.env.LH_NODE_EXE,
+    path.join(__dirname, 'runtime', 'node.exe'),   // 打包时随应用带一份（v1.0）
+  ].filter(Boolean)
+  for (const c of cands) { try { if (fs.existsSync(c)) return c } catch {} }
+  try {   // 开发态：PATH 里找得到就用
+    const out = execSync('where node', { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString()
+    const first = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0]
+    if (first && fs.existsSync(first)) return first
+  } catch {}
+  return ''   // 都没有 → 退回 process.execPath（Electron 当 Node）
+}
+const NODE_EXE = resolveNode()
+
 function runTask(task) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [DSH_BIN, '--profile', DSH_PROFILE, task], {
+    const child = spawn(NODE_EXE || process.execPath, [DSH_BIN, '--profile', DSH_PROFILE, task], {
       cwd: WORKSPACE,   // 基础围栏：干活的 cwd = 工作区
       env: childEnv({
         ELECTRON_RUN_AS_NODE: '1',        // 用应用自带的 Electron 当 Node 跑（同学机器上没有 node）
