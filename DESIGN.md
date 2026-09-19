@@ -132,6 +132,14 @@
 
 **极端环境验收（决定性证据）**：把 `PATH` 剥到只剩 `C:\Windows\system32;C:\Windows`（**没有 node、没有 python**）启动应用 → ① 只读任务答对 ✓ ② 写任务走完确认卡、用壳跑到工具箱、产出落到 `成品/` ✓ ③ **真 Word 打开产出** ✓。Dsh 状态落点也实锤迁移：新会话进 `dsh-home/sessions/`，旧 `~/.dsh` 会话数停在 25 不再增长 ✓。
 
+**踩坑记录 · 闪窗（2026-09-19 用户报，抓了一整轮）**：干活时每跑一条命令都闪一个命令框。
+- **根因**：一开始拿 **Electron 当 Node** 跑 DSH —— electron.exe 是 **GUI 子系统程序、根本没有控制台**，于是它下面每起一个命令行程序（pwsh / cmd / office.cmd），Windows 就给它分配一个**新控制台**；Win11 的默认终端又是 Windows Terminal ⇒ 每命令弹一个终端窗。
+- **修法**：运行时换成**真 Node**（控制台子系统程序）＋ `windowsHide: true` ⇒ 整棵进程树共享一个**隐藏控制台**，子进程不再新建。解析顺序：`LH_NODE_EXE` → `<app>/runtime/node.exe`（打包时自带）→ PATH 里的 `node` → 回退 Electron（会闪，但能跑）。
+- **验证**：用 `EnumWindows` 抓可见窗口（Win32 层，`.scratch/flashwatch3.ps1`）——对照组确认能抓到；换真 Node 后，同一条"跑命令"任务**新窗口数 = 0**（换之前 4~5 个 WT 窗口）。
+- **副线**：`Get-Process` 的 `MainWindowHandle` **看不见控制台窗口**（早期监视器因此一直"没抓到"，结论作废过一次）；Win11 上新控制台的宿主是 `CASCADIA_HOSTING_WINDOW_CLASS`（Windows Terminal），不是 conhost。
+- **顺带修**：Cola Hub 有 11 处 `execSync`/`spawn` 没设 `windowsHide`（wmic/nvidia-smi/netsh/claude CLI），也会闪；已补齐（hub `4b00a7c`）。
+- ⚠️ **沙箱没动**：一度想禁掉 pwsh 沙箱来验证，被权限拦下（对，那属于安全控制）——事后证明不必要，真凶是运行时而非沙箱 ✓
+
 **踩坑记录（值一条宪法级教训）**：Electron 当 Node 跑的子进程**继承了上游的 `CHROME_CRASHPAD_PIPE_NAME`**，于是它仍去注册 crashpad，被拒后把 `debug.log` 拉在 cwd——**也就是同学的工作区里**。修法：spawn 时把 `CHROME_*` / `ELECTRON_*` 环境变量一律摘掉。⚠️ 顺带钉死一条：**`ELECTRON_RUN_AS_NODE` 模式下 electron.exe 就是纯 Node，不认 Chromium 开关**（我一度加 `--disable-breakpad`，直接 `bad option` 把 spawn 打挂）。
 
 ### 工作区体验（9/19 用户提的三件事）
@@ -169,7 +177,7 @@ AI 动文件前，对话里弹**确认卡**：「我要把 A 改成 B，可以�
 | v0.5 | 外观：自定义壁纸（默认内置深海渐变）+ 玻璃透明度（默认预置 + 同学可自调） | ✅ 2026-09-19 完成（标题栏外观按钮 → 浮层：换背景图 / 恢复默认 + 玻璃透明度滑杆 30–95%，点外面自动收起。壁纸**复制进 `data/wallpaper.*`**（原图之后挪走删掉都不怕），渲染端拿 data URL + 压一层深色保对比度；滑杆驱动 `--surface` / `--surface-user`，气泡与卡片同时变。两项都进 localStorage；实测：应用 ✓ 拖杆即时变 ✓ 重启还原 ✓（正规退出）/ 恢复默认删文件回深海渐变 ✓。⚠️ 原生选图对话框本身没法 CDP 自动化，只走了代码审查；对话框之后的下游全链路已实测） |
 | v0.6 | 引擎接入：Office 读写（docx/xlsx/pptx）+ 技术任务 ← 先验证 UI↔DSH 通道（3080 API / headless / 都不行则自写工具环） | ✅ 2026-09-19 完成（工具箱 `tools/office.js` + 提示注入；实测全链路见「Office 工具箱」节） |
 | v0.7 | DSH 内嵌（exe 内部启动） | ✅ 2026-09-19 完成（三件套全自带，见「内嵌 DSH」节；极端环境实测通过）· ⚠️ 留给 v1.0：`node_modules` + `tools/` 打包时要解包到 asar 外面（外部进程读不了 asar） |
-| v1.0 | 打包 exe + 说明书（**软件内新手引导 + 一张可转发的图文**） | 计划（9/19 定） |
+| v1.0 | 打包时往 `runtime/node.exe` 塞一份真 Node（闪窗根因；从 npmmirror 的 node 镜像取，约 90MB）+ 打包 exe + 说明书（**软件内新手引导 + 一张可转发的图文**） | 计划（9/19 定） |
 | v2.0 | **Obsidian 接入**：先做**自带 markdown 笔记区**（文件天然兼容 Obsidian）；检测本机已装则打通，未装则 AI 引导安装。⚠️ 打包 Obsidian 安装包随软件分发 = 再分发闭源软件（需先核条款）+ 版本过期 + 挪目录即坏的坑——倾向"引导下载"或"发前远程代装"；v2.0 开工时定 | 远景（9/19 立项） |
 
 ## v0 不做（留结构）
