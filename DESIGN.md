@@ -119,6 +119,23 @@
 
 **残留风险（留给 v0.7 围栏硬化）**：`[只读]` 分支仍是"提示词约束"而非机制约束——真焊死要给 DSH 配只读 profile / 沙箱（`dsh-permission-presets`、`dsh-fs-sandbox` 都在，v0.7 接）。
 
+## 打包（v1.0 · 9/19）
+
+重建命令（GitHub 被墙，两个镜像必须带上）：
+```bash
+ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
+npx electron-builder --win nsis
+```
+
+**两个关键取舍**（都踩过/推理过）：
+- **`asar: false`** —— 干活引擎是**外部 node 进程**跑的，读不了 asar（asar 是 Electron 的特性，纯 Node 没有）；整目录发布最省心，换来的是零 asar 坑。
+- **`npmRebuild: false`** —— 原生模块（node-pty）是给**真 Node**（`runtime/node.exe`，同版本 ABI）用的，**不需要**为 Electron 重编译。第一次构建时 electron-builder 默认去重编译 → 连 nodejs.org 下头文件 → 被墙超时 → 卡死。
+
+**产物 / 形态**：`灯塔-Setup-0.1.0.exe`（179MB，LZMA；解包 668MB）；NSIS `oneClick` + `perMachine: false`（**不要管理员**）+ 桌面/开始菜单快捷方式。
+
+**打包态路径**：工作区 `Documents\灯塔工作区` · 数据/DSH_HOME `userData` · Node `runtime/node.exe` · key 随包 `config.json`（gitignore）· 首次运行播种规则文件、成品夹、默认壁纸。
+
 ## 内嵌 DSH（v0.7 · 9/19）
 
 目标：把干活引擎身上三根外挂管子全拔掉，让它在**没有 Hub、没有系统 Node、没有 `~/.dsh`** 的机器上也能跑。
@@ -177,7 +194,7 @@ AI 动文件前，对话里弹**确认卡**：「我要把 A 改成 B，可以�
 | v0.5 | 外观：自定义壁纸（默认内置深海渐变）+ 玻璃透明度（默认预置 + 同学可自调） | ✅ 2026-09-19 完成（标题栏外观按钮 → 浮层：换背景图 / 恢复默认 + 玻璃透明度滑杆 30–95%，点外面自动收起。壁纸**复制进 `data/wallpaper.*`**（原图之后挪走删掉都不怕），渲染端拿 data URL + 压一层深色保对比度；滑杆驱动 `--surface` / `--surface-user`，气泡与卡片同时变。两项都进 localStorage；实测：应用 ✓ 拖杆即时变 ✓ 重启还原 ✓（正规退出）/ 恢复默认删文件回深海渐变 ✓。⚠️ 原生选图对话框本身没法 CDP 自动化，只走了代码审查；对话框之后的下游全链路已实测） |
 | v0.6 | 引擎接入：Office 读写（docx/xlsx/pptx）+ 技术任务 ← 先验证 UI↔DSH 通道（3080 API / headless / 都不行则自写工具环） | ✅ 2026-09-19 完成（工具箱 `tools/office.js` + 提示注入；实测全链路见「Office 工具箱」节） |
 | v0.7 | DSH 内嵌（exe 内部启动） | ✅ 2026-09-19 完成（三件套全自带，见「内嵌 DSH」节；极端环境实测通过）· ⚠️ 留给 v1.0：`node_modules` + `tools/` 打包时要解包到 asar 外面（外部进程读不了 asar） |
-| v1.0 | 打包时往 `runtime/node.exe` 塞一份真 Node（闪窗根因；从 npmmirror 的 node 镜像取，约 90MB）+ 打包 exe + 说明书（**软件内新手引导 + 一张可转发的图文**） | 计划（9/19 定） |
+| v1.0 | 打包 exe + 说明书（软件内新手引导 + 一张可转发的图文） | ✅ 2026-09-19 打包完成（`dist/灯塔-Setup-0.1.0.exe` 179MB / 解包 668MB）：NSIS 一键装、**不要管理员**、自动建桌面快捷方式、装到用户目录。打包版实测全链路 ✓（工作区落 `Documents\灯塔工作区`、预置 key 生效、自带 node+DSH 跑通 Office 工具箱、真 Word 打开产物、**零闪窗**）。新手引导已进首次问候语 ✓；可转发图文**暂缓**（用户 9/19 说"足够了"）。⚠️ 未做代码签名 → 同学首次运行会遇 SmartScreen 提示（"更多信息 → 仍要运行"） |
 | v2.0 | **Obsidian 接入**：先做**自带 markdown 笔记区**（文件天然兼容 Obsidian）；检测本机已装则打通，未装则 AI 引导安装。⚠️ 打包 Obsidian 安装包随软件分发 = 再分发闭源软件（需先核条款）+ 版本过期 + 挪目录即坏的坑——倾向"引导下载"或"发前远程代装"；v2.0 开工时定 | 远景（9/19 立项） |
 
 ## v0 不做（留结构）
@@ -196,6 +213,9 @@ lighthouse/
 │   ├─ style.css  # 深海安静版设计语言
 │   └─ app.js     # 单会话聊天 + 流式 + 确认卡 + 压缩 + 规则（现读 / [记规则]）
 ├─ tools/office.js # 干活手的 Office 工具箱（v0.6，Node 跑，围栏锁工作区）
+├─ runtime/node.exe # 随应用分发的真 Node（闪窗根因，见「内嵌 DSH」；v1.0 打包必需）
+├─ config.json    # 分发预置的 API key（gitignore，绝不进仓库）
+├─ dist/          # 打包产物（gitignore）：灯塔-Setup-x.y.z.exe + win-unpacked/
 ├─ dsh-home/      # 内嵌 DSH 的配置树（gitignore；打包态落 userData）：profiles/headless + 播种的 office.cmd 壳
 ├─ node_modules/  # 依赖全自带：electron + dsh（240 包）+ office 四件套
 ├─ data/          # 运行数据（gitignore）：chat.json · 记忆.md · wallpaper.*（自定义壁纸）
