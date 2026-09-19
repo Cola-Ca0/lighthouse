@@ -125,6 +125,24 @@ applyGlass(savedGlass)
 document.getElementById('btn-min').onclick = () => window.lh.minimize()
 document.getElementById('btn-close').onclick = () => window.lh.close()
 
+// ---------- 拖文件进来 ----------
+// （必须拦掉默认行为，否则 Electron 会直接拿这个文件去导航）
+document.addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dropping') })
+document.addEventListener('dragleave', (e) => { if (!e.relatedTarget) document.body.classList.remove('dropping') })
+document.addEventListener('drop', async (e) => {
+  e.preventDefault()
+  document.body.classList.remove('dropping')
+  const files = [...((e.dataTransfer && e.dataTransfer.files) || [])]
+  if (!files.length) return
+  const paths = files.map((f) => window.lh.pathForFile(f)).filter(Boolean)
+  const names = await window.lh.importFiles(paths)
+  const msg = names.length
+    ? '收到 ' + names.length + ' 个文件：' + names.join('、') + '\n已经放进工作区了，接下来想让我拿它们干点啥？'
+    : '这几个文件我没拿进来（可能本来就是工作区里的，或者是文件夹）。要不你再说一次要干啥？'
+  addBot(msg)
+  storePush('bot', msg)
+})
+
 // ---------- 输入 ----------
 inputEl.addEventListener('input', () => {
   inputEl.style.height = 'auto'

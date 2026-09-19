@@ -78,6 +78,13 @@ body {
 }
 .win-btns .close:hover { background: rgba(240, 128, 96, 0.14); color: var(--danger); }
 
+/* 拖文件进窗口时的高亮（一次性状态，不循环） */
+body.dropping .chat {
+  outline: 2px dashed rgba(91, 160, 224, 0.45);
+  outline-offset: -9px;
+  background: rgba(91, 160, 224, 0.04);
+}
+
 /* ---------------- 外观浮层（v0.5） ---------------- */
 .popover {
   position: absolute; top: 54px; right: 8px; z-index: 20;

@@ -150,6 +150,7 @@ app.whenReady().then(() => {
   fs.mkdirSync(WORKSPACE, { recursive: true })
   fs.mkdirSync(DATA_DIR, { recursive: true })
   if (!fs.existsSync(RULES_PATH)) fs.writeFileSync(RULES_PATH, DEFAULT_RULES)   // 首次运行播种
+  fs.mkdirSync(path.join(WORKSPACE, '成品'), { recursive: true })               // 成品单独放，原文件不动
   ipcMain.handle('get-key', () => readKey())
   ipcMain.handle('get-rules', () => { try { return fs.readFileSync(RULES_PATH, 'utf8') } catch { return '' } })
   ipcMain.handle('append-rule', (_e, line) => {
@@ -164,8 +165,31 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('open-rules', () => shell.openPath(RULES_PATH))
   // 干活手的工具箱提示（v0.6）：告诉它 Office 有现成工具，别自己拼 XML / 别依赖本机 Python
+  // 拖文件进窗口 → 复制进工作区（只复制，不动原文件；同名自动加序号）
+  ipcMain.handle('import-files', (_e, paths) => {
+    const out = []
+    for (const p of (Array.isArray(paths) ? paths : []).slice(0, 20)) {
+      try {
+        const src = path.resolve(String(p))
+        if (!fs.statSync(src).isFile()) continue                       // 只收文件
+        const rel = path.relative(WORKSPACE, src)
+        if (!rel.startsWith('..') && !path.isAbsolute(rel)) continue   // 本来就在工作区里就不用搬
+        const ext = path.extname(src)
+        let dest = path.join(WORKSPACE, path.basename(src))
+        for (let i = 2; fs.existsSync(dest); i++) {
+          dest = path.join(WORKSPACE, path.basename(src, ext) + ' (' + i + ')' + ext)
+        }
+        fs.copyFileSync(src, dest)
+        out.push(path.basename(dest))
+      } catch { /* 单个文件失败不影响其它的 */ }
+    }
+    return out
+  })
   ipcMain.handle('get-engine-hint', () => fs.existsSync(TOOLS_JS)
-    ? '【工具箱】要读写 Word / Excel / PPT（docx / xlsx / pptx）时，一律用下面这个现成的命令行工具：'
+    ? '【成品规矩】你做出来的东西一律放进工作区的「成品」子文件夹（名字跟原文件区分开，比如「周报-改好版.docx」）；'
+      + '工作区里的原文件只读不写——除非用户明确说「直接改这个文件」。改别人的文档时，先把改好的另存到成品夹；'
+      + '顺手用的临时规格文件，用完删掉别留在成品夹里。\n\n'
+      + '【工具箱】要读写 Word / Excel / PPT（docx / xlsx / pptx）时，一律用下面这个现成的命令行工具：'
       + '用户的电脑上没有 Python，别用 Python/pip 生成文档，也别自己手拼 XML。\n'
       + 'node "' + TOOLS_JS + '" read <文件>   —— 提取文字\n'
       + 'node "' + TOOLS_JS + '" docx-new <输出.docx> <规格.json>   —— 生成 Word（xlsx-new / pptx-new 同理）\n'

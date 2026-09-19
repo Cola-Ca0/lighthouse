@@ -1,5 +1,5 @@
 // 渲染进程与主进程之间唯一的桥 — 只暴露三个最小能力
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('lh', {
   getKey: () => ipcRenderer.invoke('get-key'),
@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('lh', {
   appendRule: (line) => ipcRenderer.invoke('append-rule', line),
   openRules: () => ipcRenderer.invoke('open-rules'),
   getEngineHint: () => ipcRenderer.invoke('get-engine-hint'),
+  pathForFile: (file) => webUtils.getPathForFile(file),   // 拖进来的文件 → 拿真实路径
+  importFiles: (paths) => ipcRenderer.invoke('import-files', paths),
   getWallpaper: () => ipcRenderer.invoke('get-wallpaper'),
   pickWallpaper: () => ipcRenderer.invoke('pick-wallpaper'),
   clearWallpaper: () => ipcRenderer.invoke('clear-wallpaper'),
